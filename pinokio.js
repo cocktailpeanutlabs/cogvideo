@@ -32,6 +32,10 @@ module.exports = {
             icon: 'fa-solid fa-terminal',
             text: "Terminal",
             href: "start.js",
+          }, {
+            icon: 'fa-solid fa-folder',
+            text: "Output",
+            href: "cache/GRADIO_TEMP_DIR",
           }]
         } else {
           return [{
@@ -61,6 +65,10 @@ module.exports = {
           icon: "fa-solid fa-power-off",
           text: "Start",
           href: "start.js",
+        }, {
+          icon: 'fa-solid fa-folder',
+          text: "Output",
+          href: "cache/GRADIO_TEMP_DIR",
         }, {
           icon: "fa-solid fa-plug",
           text: "Update",
