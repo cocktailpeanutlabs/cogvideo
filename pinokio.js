@@ -35,7 +35,7 @@ module.exports = {
           }, {
             icon: 'fa-solid fa-folder',
             text: "Output",
-            href: "cache/GRADIO_TEMP_DIR",
+            href: "app/inference/output?fs",
           }]
         } else {
           return [{
@@ -68,7 +68,7 @@ module.exports = {
         }, {
           icon: 'fa-solid fa-folder',
           text: "Output",
-          href: "cache/GRADIO_TEMP_DIR",
+          href: "app/inference/output?fs",
         }, {
           icon: "fa-solid fa-plug",
           text: "Update",
