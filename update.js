@@ -11,6 +11,11 @@ module.exports = {
       message: "git pull"
     }
   }, {
+    method: "fs.rm",
+    params: {
+      path: "app/env"
+    }
+  }, {
     method: "shell.run",
     params: {
       venv: "env",                // Edit this to customize the venv folder path
