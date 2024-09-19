@@ -59,11 +59,13 @@ def init_core(name, dtype_str):
     return dtype
 
 def optimize(_pipe, full_gpu):
+    print('optimizing')
     _pipe.vae.enable_slicing()
     _pipe.vae.enable_tiling()
     if not full_gpu:
         _pipe.enable_model_cpu_offload()
         _pipe.enable_sequential_cpu_offload()
+    print('done')
     
 def init(name, image_input, video_input, dtype_str, full_gpu):
     if image_input is not None:
@@ -105,6 +107,7 @@ def init_img2vid(name, dtype_str, full_gpu):
     global pipe_image
 
     torch.cuda.empty_cache()
+    print("init cogvideox pipeline")
     if dtype_str == "bfloat16":
         dtype = torch.bfloat16
     elif dtype_str == "float16":
@@ -113,7 +116,9 @@ def init_img2vid(name, dtype_str, full_gpu):
     core_pipe.scheduler = CogVideoXDPMScheduler.from_config(core_pipe.scheduler.config, timestep_spacing="trailing")
 
     if pipe_image == None:
+        print("init i2v_transformer pipeline")
         i2v_transformer = CogVideoXTransformer3DModel.from_pretrained("THUDM/CogVideoX-5b-I2V", subfolder="transformer", torch_dtype=dtype).to("cpu")
+        print("init cogvideox image2video pipeline")
         pipe_image = CogVideoXImageToVideoPipeline.from_pretrained(
             "THUDM/CogVideoX-5b-I2V",
             transformer=i2v_transformer,
@@ -123,6 +128,7 @@ def init_img2vid(name, dtype_str, full_gpu):
             text_encoder=core_pipe.text_encoder,
             torch_dtype=dtype
         ).to(device)
+        print("done")
         optimize(pipe_image, full_gpu)
 
 os.makedirs("./output", exist_ok=True)
