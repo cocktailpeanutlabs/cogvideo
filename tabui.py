@@ -98,7 +98,7 @@ def init_vid2vid(name, dtype_str, full_gpu):
             tokenizer=pipe.tokenizer,
             text_encoder=pipe.text_encoder,
             torch_dtype=dtype
-        ).to(device)
+        )#.to(device)
         optimize(pipe_video, full_gpu)
 
 # 3. initialize img2vid pipe
