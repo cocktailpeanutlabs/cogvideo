@@ -11,6 +11,12 @@ module.exports = {
       message: "git pull"
     }
   }, {
+    method: "fs.copy",
+    params: {
+      src: "tabui.py",
+      dest: "app/inference/gradio_composite_demo/tabui.py"
+    }
+  }, {
     method: "shell.run",
     params: {
       venv: "env",                // Edit this to customize the venv folder path
