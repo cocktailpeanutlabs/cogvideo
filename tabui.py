@@ -82,7 +82,7 @@ def optimize(_pipe, full_gpu):
 def init_txt2vid(name, dtype_str, full_gpu):
     global pipe
     dtype = init_core(name, dtype_str)
-    optimize(pipe)
+    optimize(pipe, full_gpu)
        
 # 2. initialize vid2vid pipe
 def init_vid2vid(name, dtype_str, full_gpu):
