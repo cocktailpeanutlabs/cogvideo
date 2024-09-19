@@ -79,14 +79,14 @@ def init(name, image_input, video_input, dtype_str, full_gpu):
 # 1. initialize core pipe
 def init_txt2vid(name, dtype_str, full_gpu):
     global pipe
-    dtype = init_core(name, dtype_str)
+    dtype = init_core(name, dtype_str, device)
     optimize(pipe)
        
 # 2. initialize vid2vid pipe
 def init_vid2vid(name, dtype_str, full_gpu):
     global pipe
     global pipe_video
-    dtype = init_core(name, dtype_str)
+    dtype = init_core(name, dtype_str, device)
     if pipe_video == None:
         pipe_video = CogVideoXVideoToVideoPipeline.from_pretrained(
             name,
@@ -103,19 +103,24 @@ def init_vid2vid(name, dtype_str, full_gpu):
 def init_img2vid(name, dtype_str, full_gpu):
     global pipe
     global pipe_image
-    dtype = init_core(name, dtype_str)
+
+    torch.cuda.empty_cache()
+    if dtype_str == "bfloat16":
+        dtype = torch.bfloat16
+    elif dtype_str == "float16":
+        dtype = torch.float16
+    core_pipe = CogVideoXPipeline.from_pretrained(name, torch_dtype=dtype).to("cpu")
+    core_pipe.scheduler = CogVideoXDPMScheduler.from_config(pipe.scheduler.config, timestep_spacing="trailing")
+
     if pipe_image == None:
-        i2v_transformer = CogVideoXTransformer3DModel.from_pretrained("THUDM/CogVideoX-5b-I2V", subfolder="transformer", torch_dtype=dtype)
-        print("pipe to cpu")
-        pipe.to("cpu")
-        print("done")
+        i2v_transformer = CogVideoXTransformer3DModel.from_pretrained("THUDM/CogVideoX-5b-I2V", subfolder="transformer", torch_dtype=dtype).to("cpu")
         pipe_image = CogVideoXImageToVideoPipeline.from_pretrained(
             "THUDM/CogVideoX-5b-I2V",
             transformer=i2v_transformer,
-            vae=pipe.vae,
-            scheduler=pipe.scheduler,
-            tokenizer=pipe.tokenizer,
-            text_encoder=pipe.text_encoder,
+            vae=core_pipe.vae,
+            scheduler=core_pipe.scheduler,
+            tokenizer=core_pipe.tokenizer,
+            text_encoder=core_pipe.text_encoder,
             torch_dtype=dtype
         ).to(device)
         optimize(pipe_image, full_gpu)
