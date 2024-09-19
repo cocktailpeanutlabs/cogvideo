@@ -242,7 +242,8 @@ def infer(
             generator=torch.Generator(device="cpu").manual_seed(seed),
         ).frames
 
-        del pipe_video
+        pipe_video = None
+        pipe = None
         gc.collect()
         torch.cuda.empty_cache()
 
@@ -260,7 +261,8 @@ def infer(
             generator=torch.Generator(device="cpu").manual_seed(seed),
         ).frames
 
-        del pipe_image
+        pipe_image = None
+        pipe = None
         gc.collect()
         torch.cuda.empty_cache()
     else:
@@ -275,7 +277,7 @@ def infer(
             generator=torch.Generator(device="cpu").manual_seed(seed),
         ).frames
 
-        del pipe
+        pipe = None
         gc.collect()
         torch.cuda.empty_cache()
 
