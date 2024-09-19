@@ -57,6 +57,7 @@ def init(name, image_input, video_input, dtype_str, full_gpu):
         init_txt2vid(name, dtype_str, full_gpu)
 
 def init_core(name, dtype_str):
+    global pipe 
     torch.cuda.empty_cache()
     if dtype_str == "bfloat16":
         dtype = torch.bfloat16
