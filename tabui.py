@@ -110,7 +110,7 @@ def init_img2vid(name, dtype_str, full_gpu):
     elif dtype_str == "float16":
         dtype = torch.float16
     core_pipe = CogVideoXPipeline.from_pretrained(name, torch_dtype=dtype).to("cpu")
-    core_pipe.scheduler = CogVideoXDPMScheduler.from_config(pipe.scheduler.config, timestep_spacing="trailing")
+    core_pipe.scheduler = CogVideoXDPMScheduler.from_config(core_pipe.scheduler.config, timestep_spacing="trailing")
 
     if pipe_image == None:
         i2v_transformer = CogVideoXTransformer3DModel.from_pretrained("THUDM/CogVideoX-5b-I2V", subfolder="transformer", torch_dtype=dtype).to("cpu")
