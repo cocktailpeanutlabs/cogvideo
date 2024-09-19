@@ -106,6 +106,9 @@ def init_img2vid(name, dtype_str, full_gpu):
     dtype = init_core(name, dtype_str)
     if pipe_image == None:
         i2v_transformer = CogVideoXTransformer3DModel.from_pretrained("THUDM/CogVideoX-5b-I2V", subfolder="transformer", torch_dtype=dtype)
+        print("pipe to cpu")
+        pipe.to("cpu")
+        print("done")
         pipe_image = CogVideoXImageToVideoPipeline.from_pretrained(
             "THUDM/CogVideoX-5b-I2V",
             transformer=i2v_transformer,
