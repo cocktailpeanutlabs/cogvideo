@@ -33,7 +33,7 @@ import moviepy.editor as mp
 import utils
 from rife_model import load_rife_model, rife_inference_with_latents
 from huggingface_hub import hf_hub_download, snapshot_download
-
+import gc
 
 pipe = None
 pipe_image = None
@@ -47,19 +47,22 @@ initialized = None
 
 
 # 0. Unified pipe init
-def init(name, image_input, video_input, dtype_str):
-    if image_input != None:
+def init(name, image_input, video_input, dtype_str, full_gpu):
+    pipe = None
+    pipe_image = None
+    pipe_video = None
+    if image_input is not None:
         # img2vid
-        init_img2vid(name, dtype_str)
-    elif video_input != None:
+        init_img2vid(name, dtype_str, full_gpu)
+    elif video_input is not None:
         # vid2vid
-        init_vid2vid(name, dtype_str)
+        init_vid2vid(name, dtype_str, full_gpu)
     else:
         # txt2vid
-        init_txt2vid(name, dtype_str)
+        init_txt2vid(name, dtype_str, full_gpu)
 
 # 1. initialize core pipe
-def init_txt2vid(name, dtype_str):
+def init_txt2vid(name, dtype_str, full_gpu):
     global pipe
     torch.cuda.empty_cache()
     if pipe == None:
@@ -69,10 +72,15 @@ def init_txt2vid(name, dtype_str):
             dtype = torch.float16
         pipe = CogVideoXPipeline.from_pretrained(name, torch_dtype=dtype).to(device)
         pipe.scheduler = CogVideoXDPMScheduler.from_config(pipe.scheduler.config, timestep_spacing="trailing")
+        pipe.vae.enable_slicing()
+        pipe.vae.enable_tiling()
+        if not full_gpu:
+            pipe.enable_model_cpu_offload()
+            pipe.enable_sequential_cpu_offload()
     return dtype
-        
+       
 # 2. initialize vid2vid pipe
-def init_vid2vid(name, dtype_str):
+def init_vid2vid(name, dtype_str, full_gpu):
     global pipe
     global pipe_video
     torch.cuda.empty_cache()
@@ -95,9 +103,14 @@ def init_vid2vid(name, dtype_str):
             text_encoder=pipe.text_encoder,
             torch_dtype=dtype
         ).to(device)
+        pipe_video.vae.enable_slicing()
+        pipe_video.vae.enable_tiling()
+        if not full_gpu:
+            pipe_video.enable_model_cpu_offload()
+            pipe_video.enable_sequential_cpu_offload()
 
 # 3. initialize img2vid pipe
-def init_img2vid(name, dtype_str):
+def init_img2vid(name, dtype_str, full_gpu):
     global pipe
     global pipe_image
     torch.cuda.empty_cache()
@@ -106,16 +119,25 @@ def init_img2vid(name, dtype_str):
             dtype = torch.bfloat16
         elif dtype_str == "float16":
             dtype = torch.float16
-        transformer = CogVideoXTransformer3DModel.from_pretrained("THUDM/CogVideoX-5b-I2V", torch_dtype=dtype)
+        i2v_transformer = CogVideoXTransformer3DModel.from_pretrained("THUDM/CogVideoX-5b-I2V", subfolder="transformer", torch_dtype=dtype)
+        # init pipe
+        if pipe == None:
+            pipe = CogVideoXPipeline.from_pretrained(name, torch_dtype=dtype).to(device)
+            pipe.scheduler = CogVideoXDPMScheduler.from_config(pipe.scheduler.config, timestep_spacing="trailing")
         pipe_image = CogVideoXImageToVideoPipeline.from_pretrained(
             "THUDM/CogVideoX-5b-I2V",
-            transformer=transformer,
+            transformer=i2v_transformer,
             vae=pipe.vae,
             scheduler=pipe.scheduler,
             tokenizer=pipe.tokenizer,
             text_encoder=pipe.text_encoder,
             torch_dtype=dtype
         ).to(device)
+        pipe_image.vae.enable_slicing()
+        pipe_image.vae.enable_tiling()
+        if not full_gpu:
+            pipe_image.enable_model_cpu_offload()
+            pipe_image.enable_sequential_cpu_offload()
 
 os.makedirs("./output", exist_ok=True)
 os.makedirs("./gradio_tmp", exist_ok=True)
@@ -191,6 +213,8 @@ def infer(
     strength: float,
     num_inference_steps: int,
     guidance_scale: float,
+    dtype: str,
+    full_gpu: bool,
     seed: int = -1,
     progress=gr.Progress(track_tqdm=True),
 ):
@@ -198,7 +222,7 @@ def infer(
     global pipe_video
     global pipe_image
 
-    init(name, image_input, video_input, dtype)
+    init(name, image_input, video_input, dtype, full_gpu)
 
     if seed == -1:
         seed = random.randint(0, 2**8 - 1)
@@ -217,8 +241,13 @@ def infer(
             guidance_scale=guidance_scale,
             generator=torch.Generator(device="cpu").manual_seed(seed),
         ).frames
+
+        del pipe_video
+        gc.collect()
+        torch.cuda.empty_cache()
+
     elif image_input is not None:
-        image_input = Image.fromarray(image_input).resize(size=(720, 480))  # Convert to PIL
+        image_input = resize_image(Image.fromarray(image_input), (720, 480))
         image = load_image(image_input)
         video_pt = pipe_image(
             image=image,
@@ -230,6 +259,10 @@ def infer(
             guidance_scale=guidance_scale,
             generator=torch.Generator(device="cpu").manual_seed(seed),
         ).frames
+
+        del pipe_image
+        gc.collect()
+        torch.cuda.empty_cache()
     else:
         video_pt = pipe(
             prompt=prompt,
@@ -242,11 +275,39 @@ def infer(
             generator=torch.Generator(device="cpu").manual_seed(seed),
         ).frames
 
+        del pipe
+        gc.collect()
+        torch.cuda.empty_cache()
+
     return (video_pt, seed)
 
 
+def resize_image(img, target_size):
+
+    # Unpack the target size
+    target_width, target_height = target_size
+   
+    # Resize the image to match the target height while maintaining the aspect ratio
+    img_ratio = img.width / img.height
+    new_height = target_height
+    new_width = int(new_height * img_ratio)
+   
+    # Resize the image
+    resized_img = img.resize((new_width, new_height), Image.ANTIALIAS)
+   
+    # Create a black background with the target size
+    background = Image.new("RGB", target_size, (0, 0, 0))
+   
+    # Calculate the position to paste the image (centered horizontally)
+    x_offset = (target_width - new_width) // 2
+    y_offset = 0  # No offset for vertical since we match height
+   
+    # Paste the resized image onto the black background
+    background.paste(resized_img, (x_offset, y_offset))
+   
+    return background
+
 def resize_video(input_path, target_size=(720, 480)):
-    print(f"resize video {input_path}")
 
     # Load the video clip
     clip = mp.VideoFileClip(input_path)
@@ -258,8 +319,6 @@ def resize_video(input_path, target_size=(720, 480)):
     width_ratio = target_size[0] / clip.w
     height_ratio = target_size[1] / clip.h
     scale_factor = min(width_ratio, height_ratio)
-
-    print(f"resize {scale_factor}")
 
     # Resize the clip
     resized_clip = clip.resize(scale_factor)
@@ -341,6 +400,9 @@ with gr.Blocks() as demo:
             with gr.Row():
                 with gr.Column():
                     prompt = gr.Textbox(label="Prompt (Less than 200 Words. The more detailed the better.)", placeholder="Enter your prompt here", lines=5)
+                    full_gpu = gr.Checkbox(label="Use Full GPU", info="If you have a lot of GPU VRAM, check this option for faster generation", value=False)
+                    image = gr.Image(visible=False)
+                    video = gr.Video(visible=False)
 
                     strength = gr.Number(value=0.8, minimum=0.1, maximum=1.0, step=0.01, label="Strength", visible=False)
                     with gr.Row():
@@ -370,6 +432,7 @@ with gr.Blocks() as demo:
                     with gr.Row():
                         download_video_button = gr.File(label="📥 Download Video", visible=False)
                         download_gif_button = gr.File(label="📥 Download GIF", visible=False)
+                        seed_text = gr.Number(label="Seed used for generation", visible=False)
                         send_to_vid2vid_button = gr.Button("Send to video-to-video", visible=False)
             gr.Markdown("""
             <table border="0" style="width: 100%; text-align: left; margin-top: 20px;">
@@ -409,7 +472,9 @@ with gr.Blocks() as demo:
         with gr.TabItem("video-to-video", id=1):
             with gr.Row():
                 with gr.Column():
-                    video = gr.Video(label="Driving Video")
+                    image2 = gr.Image(visible=False)
+                    video2 = gr.Video(label="Driving Video")
+                    full_gpu2 = gr.Checkbox(label="Use Full GPU", info="If you have a lot of GPU VRAM, check this option for faster generation", value=False)
                     strength2 = gr.Number(value=0.8, minimum=0.1, maximum=1.0, step=0.01, label="Strength")
                     prompt2 = gr.Textbox(label="Prompt (Less than 200 Words. The more detailed the better.)", placeholder="Enter your prompt here", lines=5)
 
@@ -440,11 +505,14 @@ with gr.Blocks() as demo:
                     with gr.Row():
                         download_video_button2 = gr.File(label="📥 Download Video", visible=False)
                         download_gif_button2 = gr.File(label="📥 Download GIF", visible=False)
+                        seed_text2 = gr.Number(label="Seed used for generation", visible=False)
                         send_to_vid2vid_button2 = gr.Button("Send to video-to-video", visible=False)
         with gr.TabItem("image-to-video", id=2):
             with gr.Row():
                 with gr.Column():
-                    image = gr.Image(label="Driving Image")
+                    image3 = gr.Image(label="Driving Image")
+                    video3 = gr.Video(visible=False)
+                    full_gpu3 = gr.Checkbox(label="Use Full GPU", info="If you have a lot of GPU VRAM, check this option for faster generation", value=False)
                     strength3 = gr.Number(value=0.8, minimum=0.1, maximum=1.0, step=0.01, label="Strength")
                     prompt3 = gr.Textbox(label="Prompt (Less than 200 Words. The more detailed the better.)", placeholder="Enter your prompt here", lines=5)
 
@@ -455,7 +523,7 @@ with gr.Blocks() as demo:
                         enhance_button3 = gr.Button("✨ Enhance Prompt(Optional)")
 
                     with gr.Row():
-                        model_choice3 = gr.Dropdown(["THUDM/CogVideoX-2b", "THUDM/CogVideoX-5b"], value="THUDM/CogVideoX-2b", label="Model")
+                        model_choice3 = gr.Dropdown(["THUDM/CogVideoX-2b", "THUDM/CogVideoX-5b"], value="THUDM/CogVideoX-5b", label="Model", visible=False)
                     with gr.Row():
                         num_inference_steps3 = gr.Number(label="Inference Steps", value=50)
                         guidance_scale3 = gr.Number(label="Guidance Scale", value=6.0)
@@ -475,6 +543,7 @@ with gr.Blocks() as demo:
                     with gr.Row():
                         download_video_button3 = gr.File(label="📥 Download Video", visible=False)
                         download_gif_button3 = gr.File(label="📥 Download GIF", visible=False)
+                        seed_text3 = gr.Number(label="Seed used for generation", visible=False)
                         send_to_vid2vid_button3 = gr.Button("Send to video-to-video", visible=False)
 
     def generate(
@@ -489,6 +558,7 @@ with gr.Blocks() as demo:
         seed_value,
         scale_status,
         rife_status,
+        full_gpu=full_gpu,
         progress=gr.Progress(track_tqdm=True)
     ):
 
@@ -500,6 +570,8 @@ with gr.Blocks() as demo:
             video_strength,
             num_inference_steps=num_inference_steps,
             guidance_scale=guidance_scale,
+            dtype=dtype,
+            full_gpu=full_gpu,
             seed=seed_value,
             progress=progress,
         )
@@ -537,27 +609,27 @@ with gr.Blocks() as demo:
 
     generate_button.click(
         generate,
-        inputs=[prompt, None, None, strength, num_inference_steps, guidance_scale, model_choice, dtype_choice, seed_param, scale_status, rife_status],
-        outputs=[video_output, download_video_button, download_gif_button, send_to_vid2vid_button],
+        inputs=[prompt, image, video, strength, num_inference_steps, guidance_scale, model_choice, dtype_choice, seed_param, enable_scale, enable_rife, full_gpu],
+        outputs=[video_output, download_video_button, download_gif_button, seed_text, send_to_vid2vid_button],
     )
     generate_button2.click(
         generate,
-        inputs=[prompt2, None, video, strength2, num_inference_steps2, guidance_scale2, model_choice2, dtype_choice2, seed_parm2, scale_status2, rife_status2],
-        outputs=[video_output2, download_video_button2, download_gif_button2, send_to_vid2vid_button2],
+        inputs=[prompt2, image2, video2, strength2, num_inference_steps2, guidance_scale2, model_choice2, dtype_choice2, seed_param2, enable_scale2, enable_rife2, full_gpu2],
+        outputs=[video_output2, download_video_button2, download_gif_button2, seed_text2, send_to_vid2vid_button2],
     )
     generate_button3.click(
         generate,
-        inputs=[prompt3, image, None, strength3, num_inference_steps3, guidance_scale3, model_choice3, dtype_choice3, seed_param3, scale_status3, rife_status3],
-        outputs=[video_output3, download_video_button3, download_gif_button3, send_to_vid2vid_button3],
+        inputs=[prompt3, image3, video3, strength3, num_inference_steps3, guidance_scale3, model_choice3, dtype_choice3, seed_param3, enable_scale3, enable_rife3, full_gpu3],
+        outputs=[video_output3, download_video_button3, download_gif_button3, seed_text3, send_to_vid2vid_button3],
     )
 
     enhance_button.click(enhance_prompt_func, inputs=[prompt], outputs=[prompt])
     enhance_button2.click(enhance_prompt_func, inputs=[prompt2], outputs=[prompt2])
-    enhance_button3.click(enhance_prompt_func, inputs=[prompt2], outputs=[prompt2])
+    enhance_button3.click(enhance_prompt_func, inputs=[prompt3], outputs=[prompt3])
 
-    send_to_vid2vid_button.click(send_to_vid2vid, inputs=[video_output], outputs=[video, tabs])
-    send_to_vid2vid_button2.click(send_to_vid2vid, inputs=[video_output], outputs=[video, tabs])
-    send_to_vid2vid_button3click(send_to_vid2vid, inputs=[video_output], outputs=[video, tabs])
+    send_to_vid2vid_button.click(send_to_vid2vid, inputs=[video_output], outputs=[video2, tabs])
+    send_to_vid2vid_button2.click(send_to_vid2vid, inputs=[video_output2], outputs=[video2, tabs])
+    send_to_vid2vid_button3.click(send_to_vid2vid, inputs=[video_output3], outputs=[video2, tabs])
 
 if __name__ == "__main__":
     demo.launch()
