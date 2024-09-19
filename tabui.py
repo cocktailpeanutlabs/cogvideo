@@ -537,17 +537,17 @@ with gr.Blocks() as demo:
 
     generate_button.click(
         generate,
-        inputs=[prompt, None, None, strength, num_inference_steps, guidance_scale, model_choice, dtype_choice, seed_value, scale_status, rife_status],
+        inputs=[prompt, None, None, strength, num_inference_steps, guidance_scale, model_choice, dtype_choice, seed_param, scale_status, rife_status],
         outputs=[video_output, download_video_button, download_gif_button, send_to_vid2vid_button],
     )
     generate_button2.click(
         generate,
-        inputs=[prompt2, None, video, strength2, num_inference_steps2, guidance_scale2, model_choice2, dtype_choice2, seed_value2, scale_status2, rife_status2],
+        inputs=[prompt2, None, video, strength2, num_inference_steps2, guidance_scale2, model_choice2, dtype_choice2, seed_parm2, scale_status2, rife_status2],
         outputs=[video_output2, download_video_button2, download_gif_button2, send_to_vid2vid_button2],
     )
     generate_button3.click(
         generate,
-        inputs=[prompt3, image, None, strength3, num_inference_steps3, guidance_scale3, model_choice3, dtype_choice3, seed_value3, scale_status3, rife_status3],
+        inputs=[prompt3, image, None, strength3, num_inference_steps3, guidance_scale3, model_choice3, dtype_choice3, seed_param3, scale_status3, rife_status3],
         outputs=[video_output3, download_video_button3, download_gif_button3, send_to_vid2vid_button3],
     )
 
