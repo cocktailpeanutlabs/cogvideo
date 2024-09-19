@@ -4,13 +4,13 @@ module.exports = {
     {
       method: "shell.run",
       params: {
-        venv: "../env",                // Edit this to customize the venv folder path
+        venv: "../../env",                // Edit this to customize the venv folder path
         env: {
           "PYTORCH_ENABLE_MPS_FALLBACK": "1"  
         },                   // Edit this to customize environment variables (see documentation)
-        path: "app/inference",                // Edit this to customize the path to start the shell from
+        path: "app/inference/gradio_composite_demo",                // Edit this to customize the path to start the shell from
         message: [
-          "python gradio_web_demo.py"
+          "python tabui.py"
         ],
         on: [{
           // The regular expression pattern to monitor.
