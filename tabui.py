@@ -578,8 +578,10 @@ with gr.Blocks() as demo:
             progress=progress,
         )
         if scale_status:
+            upscale_model = utils.load_sd_upscale("model_real_esran/RealESRGAN_x4.pth", device)
             latents = utils.upscale_batch_and_concatenate(upscale_model, latents, device)
         if rife_status:
+            frame_interpolation_model = load_rife_model("model_rife")
             latents = rife_inference_with_latents(frame_interpolation_model, latents)
 
         batch_size = latents.shape[0]
