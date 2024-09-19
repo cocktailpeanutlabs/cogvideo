@@ -45,8 +45,17 @@ snapshot_download(repo_id="AlexWortega/RIFE", local_dir="model_rife")
 
 initialized = None
 
+def init(name, image_input, video_input, dtype_str, full_gpu):
+    if image_input is not None:
+        # img2vid
+        init_img2vid(name, dtype_str, full_gpu)
+    elif video_input is not None:
+        # vid2vid
+        init_vid2vid(name, dtype_str, full_gpu)
+    else:
+        # txt2vid
+        init_txt2vid(name, dtype_str, full_gpu)
 
-# 0. Unified pipe init
 def init_core(name, dtype_str):
     torch.cuda.empty_cache()
     if dtype_str == "bfloat16":
@@ -67,16 +76,6 @@ def optimize(_pipe, full_gpu):
         _pipe.enable_sequential_cpu_offload()
     print('done')
     
-def init(name, image_input, video_input, dtype_str, full_gpu):
-    if image_input is not None:
-        # img2vid
-        init_img2vid(name, dtype_str, full_gpu)
-    elif video_input is not None:
-        # vid2vid
-        init_vid2vid(name, dtype_str, full_gpu)
-    else:
-        # txt2vid
-        init_txt2vid(name, dtype_str, full_gpu)
 
 # 1. initialize core pipe
 def init_txt2vid(name, dtype_str, full_gpu):
@@ -127,7 +126,7 @@ def init_img2vid(name, dtype_str, full_gpu):
             tokenizer=core_pipe.tokenizer,
             text_encoder=core_pipe.text_encoder,
             torch_dtype=dtype
-        ).to(device)
+        )#.to(device)
         print("done")
         optimize(pipe_image, full_gpu)
 
@@ -394,7 +393,7 @@ with gr.Blocks() as demo:
             with gr.Row():
                 with gr.Column():
                     prompt = gr.Textbox(label="Prompt (Less than 200 Words. The more detailed the better.)", placeholder="Enter your prompt here", lines=5)
-                    full_gpu = gr.Checkbox(label="Use Full GPU", info="If you have a lot of GPU VRAM, check this option for faster generation", value=False)
+                    full_gpu = gr.Checkbox(label="Use Full GPU", info="If you have a lot of GPU VRAM, check this option for faster generation", value=False, visible=False)
                     image = gr.Image(visible=False)
                     video = gr.Video(visible=False)
 
@@ -468,7 +467,7 @@ with gr.Blocks() as demo:
                 with gr.Column():
                     image2 = gr.Image(visible=False)
                     video2 = gr.Video(label="Driving Video")
-                    full_gpu2 = gr.Checkbox(label="Use Full GPU", info="If you have a lot of GPU VRAM, check this option for faster generation", value=False)
+                    full_gpu2 = gr.Checkbox(label="Use Full GPU", info="If you have a lot of GPU VRAM, check this option for faster generation", value=False, visible=False)
                     strength2 = gr.Number(value=0.8, minimum=0.1, maximum=1.0, step=0.01, label="Strength")
                     prompt2 = gr.Textbox(label="Prompt (Less than 200 Words. The more detailed the better.)", placeholder="Enter your prompt here", lines=5)
 
@@ -506,7 +505,7 @@ with gr.Blocks() as demo:
                 with gr.Column():
                     image3 = gr.Image(label="Driving Image")
                     video3 = gr.Video(visible=False)
-                    full_gpu3 = gr.Checkbox(label="Use Full GPU", info="If you have a lot of GPU VRAM, check this option for faster generation", value=False)
+                    full_gpu3 = gr.Checkbox(label="Use Full GPU", info="If you have a lot of GPU VRAM, check this option for faster generation", value=False, visible=False)
                     strength3 = gr.Number(value=0.8, minimum=0.1, maximum=1.0, step=0.01, label="Strength")
                     prompt3 = gr.Textbox(label="Prompt (Less than 200 Words. The more detailed the better.)", placeholder="Enter your prompt here", lines=5)
 
