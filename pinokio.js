@@ -35,7 +35,7 @@ module.exports = {
           }, {
             icon: 'fa-solid fa-folder',
             text: "Output",
-            href: "app/inference/output?fs",
+            href: "app/inference/gradio_composite_demo/output?fs",
           }]
         } else {
           return [{

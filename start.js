@@ -10,7 +10,7 @@ module.exports = {
         },                   // Edit this to customize environment variables (see documentation)
         path: "app/inference/gradio_composite_demo",                // Edit this to customize the path to start the shell from
         message: [
-          "python tabui.py"
+          "python cogstudio.py"
         ],
         on: [{
           // The regular expression pattern to monitor.

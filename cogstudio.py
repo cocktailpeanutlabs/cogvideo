@@ -57,7 +57,7 @@ def init(name, image_input, video_input, dtype_str, full_gpu):
         init_txt2vid(name, dtype_str, full_gpu)
 
 def init_core(name, dtype_str):
-    global pipe 
+    global pipe
     torch.cuda.empty_cache()
     if dtype_str == "bfloat16":
         dtype = torch.bfloat16
@@ -76,7 +76,7 @@ def optimize(_pipe, full_gpu):
         _pipe.enable_model_cpu_offload()
         _pipe.enable_sequential_cpu_offload()
     print('done')
-    
+   
 
 # 1. initialize core pipe
 def init_txt2vid(name, dtype_str, full_gpu):
@@ -371,9 +371,12 @@ def delete_old_files():
         time.sleep(600)
 
 
-threading.Thread(target=delete_old_files, daemon=True).start()
+#threading.Thread(target=delete_old_files, daemon=True).start()
+css="""
+.info{ padding: 15px; font-weight: bold; background: rgba(0, 0, 0, 0.04); }
+"""
 
-with gr.Blocks() as demo:
+with gr.Blocks(css=css) as demo:
 #    gr.Markdown("""
 #           <div style="text-align: center; font-size: 32px; font-weight: bold; margin-bottom: 20px;">
 #               CogVideoX-2B Huggingface Space🤗
@@ -391,10 +394,11 @@ with gr.Blocks() as demo:
 #           """)
     with gr.Tabs(selected=0) as tabs:
         with gr.TabItem("text-to-video", id=0):
+            gr.HTML("<div class='info'>Generate a video from a prompt</div>")
             with gr.Row():
                 with gr.Column():
                     prompt = gr.Textbox(label="Prompt (Less than 200 Words. The more detailed the better.)", placeholder="Enter your prompt here", lines=5)
-                    full_gpu = gr.Checkbox(label="Use Full GPU", info="If you have a lot of GPU VRAM, check this option for faster generation", value=False, visible=False)
+                    full_gpu = gr.Checkbox(label="Use Full GPU", info="If you have a lot of GPU VRAM, check this option for faster generation", value=False)
                     image = gr.Image(visible=False)
                     video = gr.Video(visible=False)
 
@@ -428,6 +432,7 @@ with gr.Blocks() as demo:
                         download_gif_button = gr.File(label="📥 Download GIF", visible=False)
                         seed_text = gr.Number(label="Seed used for generation", visible=False)
                         send_to_vid2vid_button = gr.Button("Send to video-to-video", visible=False)
+                        send_to_extendvid_button = gr.Button("Send to extend-video", visible=False)
             gr.Markdown("""
             <table border="0" style="width: 100%; text-align: left; margin-top: 20px;">
                 <div style="text-align: center; font-size: 24px; font-weight: bold; margin-bottom: 20px;">
@@ -464,6 +469,7 @@ with gr.Blocks() as demo:
             </table>
             """)
         with gr.TabItem("video-to-video", id=1):
+            gr.HTML("<div class='info'>Transform a video with a prompt</div>")
             with gr.Row():
                 with gr.Column():
                     image2 = gr.Image(visible=False)
@@ -501,7 +507,9 @@ with gr.Blocks() as demo:
                         download_gif_button2 = gr.File(label="📥 Download GIF", visible=False)
                         seed_text2 = gr.Number(label="Seed used for generation", visible=False)
                         send_to_vid2vid_button2 = gr.Button("Send to video-to-video", visible=False)
+                        send_to_extendvid_button2 = gr.Button("Send to extend-video", visible=False)
         with gr.TabItem("image-to-video", id=2):
+            gr.HTML("<div class='info'>Generate 6 second videos starting from an image</div>")
             with gr.Row():
                 with gr.Column():
                     image3 = gr.Image(label="Driving Image")
@@ -539,6 +547,117 @@ with gr.Blocks() as demo:
                         download_gif_button3 = gr.File(label="📥 Download GIF", visible=False)
                         seed_text3 = gr.Number(label="Seed used for generation", visible=False)
                         send_to_vid2vid_button3 = gr.Button("Send to video-to-video", visible=False)
+                        send_to_extendvid_button3 = gr.Button("Send to extend-video", visible=False)
+        with gr.TabItem("extend-video", id=3):
+            gr.HTML("<div class='info'>Take any video and extend 6 seconds</div>")
+            with gr.Row():
+                with gr.Column():
+                    with gr.Row():
+                        video_to_extend = gr.Video(label="Video to extend")
+                        extend_frame = gr.Image(label="Extrend from the last frame", visible=False)
+                    video4 = gr.Video(visible=False)
+                    full_gpu4 = gr.Checkbox(label="Use Full GPU", info="If you have a lot of GPU VRAM, check this option for faster generation", value=False, visible=False)
+                    strength4 = gr.Number(value=0.8, minimum=0.1, maximum=1.0, step=0.01, label="Strength")
+                    prompt4 = gr.Textbox(label="Prompt (Less than 200 Words. The more detailed the better.)", placeholder="Enter your prompt here", lines=5)
+
+                    with gr.Row():
+                        gr.Markdown(
+                            "✨ To enhance the prompt, either set the OPENAI_API_KEY variable from the Configure menu (if you have an OpenAI API key), or just use chatgpt to enhance the prompt manually (Recommended)",
+                        )
+                        enhance_button4 = gr.Button("✨ Enhance Prompt(Optional)")
+
+                    with gr.Row():
+                        model_choice4 = gr.Dropdown(["THUDM/CogVideoX-2b", "THUDM/CogVideoX-5b"], value="THUDM/CogVideoX-5b", label="Model", visible=False)
+                    with gr.Row():
+                        num_inference_steps4 = gr.Number(label="Inference Steps", value=50)
+                        guidance_scale4 = gr.Number(label="Guidance Scale", value=6.0)
+                    with gr.Row():
+                        dtype_choice4 = gr.Radio(["bfloat16", "float16"], label="dtype (older machines may not support bfloat16. try float16 if bfloat16 doesn't work)", value="bfloat16")
+                    with gr.Row():
+                        seed_param4 = gr.Number(
+                            label="Inference Seed (Enter a positive number, -1 for random)", value=-1
+                        )
+                    with gr.Row():
+                        enable_scale4 = gr.Checkbox(label="Super-Resolution (720 × 480 -> 2880 × 1920)", value=False)
+                        enable_rife4 = gr.Checkbox(label="Frame Interpolation (8fps -> 16fps)", value=False)
+                    generate_button4 = gr.Button("🎬 Generate Video")
+
+                with gr.Column():
+                    video_output4 = gr.Video(label="CogVideoX Generate Video", width=720, height=480)
+                    with gr.Row():
+                        download_video_button4 = gr.File(label="📥 Download Video", visible=False)
+                        download_gif_button4 = gr.File(label="📥 Download GIF", visible=False)
+                        seed_text4 = gr.Number(label="Seed used for generation", visible=False)
+                        send_to_vid2vid_button4 = gr.Button("Send to video-to-video", visible=False)
+                        send_to_extendvid_button4 = gr.Button("Send to extend-video", visible=False)
+
+    def last_frame(
+        video_to_extend,
+    ):
+        # wait till the file is fully uploaded
+        prev_size = -1
+        while True:
+            size = os.path.getsize(video_to_extend)
+            if size == prev_size:
+                break
+            prev_size = size
+            time.sleep(0.5)
+
+        clip = mp.VideoFileClip(video_to_extend)
+        print(f"clip duration = {clip.duration}")
+        last_frame = clip.get_frame(clip.duration-0.01)
+        frame = Image.fromarray(last_frame)
+        return gr.update(value=frame, visible=True)
+
+    def extend(
+        prompt,
+        video_to_extend,
+        image_input,
+        video_input,
+        video_strength,
+        num_inference_steps,
+        guidance_scale,
+        model_choice,
+        dtype,
+        seed_value,
+        scale_status,
+        rife_status,
+        full_gpu=full_gpu,
+        progress=gr.Progress(track_tqdm=True)
+    ):
+        # normal generation
+        video_path, video_update, gif_update, seed_update, vid2vid_update, extendvid_update = generate(
+            prompt,
+            image_input,
+            video_input,
+            video_strength,
+            num_inference_steps,
+            guidance_scale,
+            model_choice,
+            dtype,
+            seed_value,
+            scale_status,
+            rife_status,
+            full_gpu=full_gpu,
+            progress=gr.Progress(track_tqdm=True)
+        )
+
+        # stitch video_to_extend with the generated video
+        print(f"stitch {video_to_extend} {video_path}")
+        video1 = mp.VideoFileClip(video_to_extend)
+        video2 = mp.VideoFileClip(video_path)
+
+        extended_video = mp.concatenate_videoclips([video1, video2])
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        extended_video_path = f"./output/{timestamp}.mp4"
+        extended_video.write_videofile(extended_video_path, codec="libx264")
+
+        video_update = gr.update(visible=True, value=extended_video_path)
+        gif_path = convert_to_gif(extended_video_path)
+        gif_update = gr.update(visible=True, value=gif_path)
+
+        return extended_video_path, video_update, gif_update, seed_update, vid2vid_update, extendvid_update
 
     def generate(
         prompt,
@@ -592,8 +711,9 @@ with gr.Blocks() as demo:
         gif_update = gr.update(visible=True, value=gif_path)
         seed_update = gr.update(visible=True, value=seed)
         vid2vid_update = gr.update(visible=True)
+        extendvid_update = gr.update(visible=True)
 
-        return video_path, video_update, gif_update, seed_update, vid2vid_update
+        return video_path, video_update, gif_update, seed_update, vid2vid_update, extendvid_update
 
     def enhance_prompt_func(prompt):
         return convert_prompt(prompt, retry_times=1)
@@ -602,30 +722,51 @@ with gr.Blocks() as demo:
         vid2vid = gr.update(value=vid)
         tabs = gr.Tabs(selected=1)
         return [vid2vid, tabs]
+    def send_to_extendvid(vid):
+        extendvid = gr.update(value=vid)
+        tabs = gr.Tabs(selected=3)
+        return [extendvid, tabs]
 
     generate_button.click(
         generate,
         inputs=[prompt, image, video, strength, num_inference_steps, guidance_scale, model_choice, dtype_choice, seed_param, enable_scale, enable_rife, full_gpu],
-        outputs=[video_output, download_video_button, download_gif_button, seed_text, send_to_vid2vid_button],
+        outputs=[video_output, download_video_button, download_gif_button, seed_text, send_to_vid2vid_button, send_to_extendvid_button],
     )
     generate_button2.click(
         generate,
         inputs=[prompt2, image2, video2, strength2, num_inference_steps2, guidance_scale2, model_choice2, dtype_choice2, seed_param2, enable_scale2, enable_rife2, full_gpu2],
-        outputs=[video_output2, download_video_button2, download_gif_button2, seed_text2, send_to_vid2vid_button2],
+        outputs=[video_output2, download_video_button2, download_gif_button2, seed_text2, send_to_vid2vid_button2, send_to_extendvid_button2],
     )
     generate_button3.click(
         generate,
         inputs=[prompt3, image3, video3, strength3, num_inference_steps3, guidance_scale3, model_choice3, dtype_choice3, seed_param3, enable_scale3, enable_rife3, full_gpu3],
-        outputs=[video_output3, download_video_button3, download_gif_button3, seed_text3, send_to_vid2vid_button3],
+        outputs=[video_output3, download_video_button3, download_gif_button3, seed_text3, send_to_vid2vid_button3, send_to_extendvid_button3],
+    )
+    generate_button4.click(
+        extend,
+        inputs=[prompt4, video_to_extend, extend_frame, video4, strength4, num_inference_steps4, guidance_scale4, model_choice4, dtype_choice4, seed_param4, enable_scale4, enable_rife4, full_gpu4],
+        outputs=[video_output4, download_video_button4, download_gif_button4, seed_text4, send_to_vid2vid_button4, send_to_extendvid_button4],
+    )
+    video_to_extend.change(
+        last_frame,
+        inputs=[video_to_extend],
+        outputs=[extend_frame]
     )
 
     enhance_button.click(enhance_prompt_func, inputs=[prompt], outputs=[prompt])
     enhance_button2.click(enhance_prompt_func, inputs=[prompt2], outputs=[prompt2])
     enhance_button3.click(enhance_prompt_func, inputs=[prompt3], outputs=[prompt3])
+    enhance_button4.click(enhance_prompt_func, inputs=[prompt4], outputs=[prompt4])
 
     send_to_vid2vid_button.click(send_to_vid2vid, inputs=[video_output], outputs=[video2, tabs])
     send_to_vid2vid_button2.click(send_to_vid2vid, inputs=[video_output2], outputs=[video2, tabs])
     send_to_vid2vid_button3.click(send_to_vid2vid, inputs=[video_output3], outputs=[video2, tabs])
+    send_to_vid2vid_button4.click(send_to_vid2vid, inputs=[video_output4], outputs=[video2, tabs])
+
+    send_to_extendvid_button.click(send_to_extendvid, inputs=[video_output], outputs=[video_to_extend, tabs])
+    send_to_extendvid_button2.click(send_to_extendvid, inputs=[video_output2], outputs=[video_to_extend, tabs])
+    send_to_extendvid_button3.click(send_to_extendvid, inputs=[video_output3], outputs=[video_to_extend, tabs])
+    send_to_extendvid_button4.click(send_to_extendvid, inputs=[video_output4], outputs=[video_to_extend, tabs])
 
 if __name__ == "__main__":
     demo.launch()

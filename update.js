@@ -14,11 +14,5 @@ module.exports = {
     params: {
       path: "install.js"
     }
-  }, {
-    method: "fs.copy",
-    params: {
-      src: "tabui.py",
-      dest: "app/inference/gradio_composite_demo/tabui.py"
-    }
   }]
 }
